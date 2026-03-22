@@ -3,43 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>水平思考謎題 - 高品質朗讀版</title>
+    <title>水平思考謎題：數位課堂投影片</title>
     
-    <!-- React & ReactDOM -->
+    <!-- React & Libraries -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- PapaParse for CSV -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Poppins:wght@600&display=swap" rel="stylesheet">
 
     <style>
         body {
             font-family: 'Noto Sans TC', sans-serif;
-            background-color: #f3f4f6;
+            background-color: #0f172a; 
+            color: #f8fafc;
+            overflow: hidden; 
         }
-        .perspective-1000 { perspective: 1000px; }
-        .transform-style-3d { transform-style: preserve-3d; }
-        .backface-hidden {
-            backface-visibility: hidden;
+        
+        .slide-enter { animation: slideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .perspective-container {
+            perspective: 2000px;
+        }
+        .flip-card-inner {
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        .is-flipped { 
+            transform: rotateY(180deg); 
+        }
+        .backface-hidden { 
+            backface-visibility: hidden; 
             -webkit-backface-visibility: hidden;
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
         }
-        .rotate-y-180 { transform: rotateY(180deg); }
+        
+        .card-front {
+            z-index: 2;
+            transform: rotateY(0deg);
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+
+        /* 優化捲動條 */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: rgba(0,0,0,0.2);
+            background: rgba(15, 23, 42, 0.2);
             border-radius: 10px;
         }
-        .card-container { transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-back .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 修正文字被切掉的核心 CSS */
+        .content-scroll-area {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+        }
+        
+        /* 讓文字在不溢出時置中，溢出時從頂部開始 */
+        .text-wrapper {
+            margin: auto 0;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -49,258 +93,269 @@
         const { useState, useEffect, useCallback, useRef } = React;
 
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSuRzbw5MzdzHNufEOYxr-WmDqa6mqcyoXh4HKSvfEcotObk4r59rt7GMQEKZXv63k8zytO7__lqFaw/pub?gid=2123710659&single=true&output=csv";
-        const AUDIO_TURN_URL = "https://cdn.pixabay.com/download/audio/2025/05/05/audio_ca4220361e.mp3?filename=turn-a-page-336933.mp3";
 
-        // --- Icons ---
         const SpeakerIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        );
-        const ShuffleIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l14.2-12.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l14.2 12.6c.8 1.1 2 1.7 3.3 1.7H22"/></svg>
-        );
-        const ArrowLeftIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-        );
-        const ArrowRightIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
         );
 
         const App = () => {
-            const [cards, setCards] = useState([]);
-            const [currentIndex, setCurrentIndex] = useState(0);
+            const [puzzles, setPuzzles] = useState([]);
+            const [currentStep, setCurrentStep] = useState(0); 
             const [isFlipped, setIsFlipped] = useState(false);
             const [loading, setLoading] = useState(true);
-            const [error, setError] = useState(null);
             const [isSpeaking, setIsSpeaking] = useState(false);
             const voicesRef = useRef([]);
 
-            // --- 高品質聲音初始化 ---
             useEffect(() => {
                 const loadVoices = () => {
                     voicesRef.current = window.speechSynthesis.getVoices();
                 };
                 loadVoices();
-                if (window.speechSynthesis.onvoiceschanged !== undefined) {
-                    window.speechSynthesis.onvoiceschanged = loadVoices;
-                }
+                window.speechSynthesis.onvoiceschanged = loadVoices;
             }, []);
 
-            const findBestVoice = (lang) => {
-                const availableVoices = voicesRef.current.filter(v => v.lang.includes(lang));
-                // 優先級排序：1. Natural (Edge) 2. Online (Google) 3. Premium 4. 一般
-                return availableVoices.find(v => v.name.includes('Natural')) ||
-                       availableVoices.find(v => v.name.includes('Google')) ||
-                       availableVoices.find(v => v.name.includes('Premium')) ||
-                       availableVoices[0];
-            };
-
-            const stopSpeech = () => {
-                window.speechSynthesis.cancel();
-                setIsSpeaking(false);
-            };
-
-            const handleSpeak = (e) => {
-                e.stopPropagation();
-                
-                if (isSpeaking) {
-                    stopSpeech();
-                    return;
-                }
-
-                const textToRead = isFlipped ? cards[currentIndex].answer : cards[currentIndex].question;
-                const utterance = new SpeechSynthesisUtterance(textToRead);
-                
-                const isEnglish = /^[A-Za-z0-9\s,.'?!]+$/.test(textToRead);
-                const targetLang = isEnglish ? 'en' : 'zh';
-                const bestVoice = findBestVoice(targetLang);
-
-                if (bestVoice) {
-                    utterance.voice = bestVoice;
-                    utterance.lang = bestVoice.lang;
-                } else {
-                    utterance.lang = isEnglish ? 'en-US' : 'zh-TW';
-                }
-
-                utterance.rate = 0.95;
-                utterance.pitch = 1.0;
-
-                utterance.onstart = () => setIsSpeaking(true);
-                utterance.onend = () => setIsSpeaking(false);
-                utterance.onerror = () => setIsSpeaking(false);
-
-                window.speechSynthesis.speak(utterance);
-            };
-
-            // 翻牌音效
-            const playTurnSound = useCallback(() => {
-                const audio = new Audio(AUDIO_TURN_URL);
-                audio.volume = 0.3;
-                audio.play().catch(() => {});
-            }, []);
-
-            // 抓取資料
             useEffect(() => {
-                fetchData();
-            }, []);
-
-            const fetchData = () => {
                 setLoading(true);
                 Papa.parse(CSV_URL, {
                     download: true,
                     header: true,
                     skipEmptyLines: true,
                     complete: (results) => {
-                        try {
-                            const formattedData = results.data.map((row, index) => {
-                                const qKey = Object.keys(row).find(k => k.includes("問題") || k.includes("Question"));
-                                const aKey = Object.keys(row).find(k => k.includes("答案") || k.includes("Answer"));
-                                return {
-                                    id: index,
-                                    question: row[qKey] || "讀取問題錯誤",
-                                    answer: row[aKey] || "讀取答案錯誤"
-                                };
-                            }).filter(card => card.question && card.answer);
-
-                            if (formattedData.length === 0) {
-                                setError("試算表資料為空");
-                            } else {
-                                setCards(formattedData);
-                                setError(null);
-                            }
-                        } catch (err) {
-                            setError("解析錯誤：" + err.message);
-                        }
-                        setLoading(false);
-                    },
-                    error: () => {
-                        setError("無法連線至 Google 試算表");
+                        const data = results.data.map((row, index) => {
+                            const qKey = Object.keys(row).find(k => k.includes("問題") || k.includes("Question"));
+                            const aKey = Object.keys(row).find(k => k.includes("答案") || k.includes("Answer"));
+                            return { id: index, q: row[qKey], a: row[aKey] };
+                        }).filter(item => item.q && item.a);
+                        setPuzzles(data);
                         setLoading(false);
                     }
                 });
+            }, []);
+
+            const speak = (text) => {
+                window.speechSynthesis.cancel();
+                if (isSpeaking) { setIsSpeaking(false); return; }
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                const isEnglish = /^[A-Za-z0-9\s,.'?!]+$/.test(text);
+                const langCode = isEnglish ? 'en' : 'zh';
+                
+                const bestVoice = voicesRef.current.find(v => v.lang.includes(langCode) && (v.name.includes('Natural') || v.name.includes('Google'))) || 
+                                 voicesRef.current.find(v => v.lang.includes(langCode));
+                
+                if (bestVoice) utterance.voice = bestVoice;
+                utterance.rate = 0.95;
+                utterance.onstart = () => setIsSpeaking(true);
+                utterance.onend = () => setIsSpeaking(false);
+                window.speechSynthesis.speak(utterance);
             };
 
-            const handleFlip = () => {
-                stopSpeech();
-                playTurnSound();
-                setIsFlipped(!isFlipped);
-            };
-
-            const changeCard = (offset) => {
-                stopSpeech();
-                playTurnSound();
+            const nextSlide = () => {
+                window.speechSynthesis.cancel();
+                setIsSpeaking(false);
                 setIsFlipped(false);
-                setTimeout(() => {
-                    setCurrentIndex(prev => (prev + offset + cards.length) % cards.length);
-                }, 200);
+                setCurrentStep(prev => prev + 1);
             };
 
-            const handleShuffle = () => {
-                stopSpeech();
-                playTurnSound();
+            const prevSlide = () => {
+                window.speechSynthesis.cancel();
+                setIsSpeaking(false);
                 setIsFlipped(false);
-                setTimeout(() => {
-                    setCards([...cards].sort(() => Math.random() - 0.5));
-                    setCurrentIndex(0);
-                }, 300);
+                setCurrentStep(prev => Math.max(0, prev - 1));
             };
 
             useEffect(() => {
                 const onKeyDown = (e) => {
-                    if (e.code === 'Space') { e.preventDefault(); handleFlip(); }
-                    if (e.code === 'ArrowRight') changeCard(1);
-                    if (e.code === 'ArrowLeft') changeCard(-1);
+                    if (e.key === 'ArrowRight') nextSlide();
+                    if (e.key === 'ArrowLeft') prevSlide();
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                        if (currentStep >= 2 && currentStep - 2 < puzzles.length) {
+                            setIsFlipped(prev => !prev);
+                        }
+                    }
                 };
                 window.addEventListener('keydown', onKeyDown);
                 return () => window.removeEventListener('keydown', onKeyDown);
-            }, [cards, isFlipped, currentIndex]);
+            }, [currentStep, puzzles]);
 
             if (loading) return (
-                <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-                    <p className="text-gray-600">載入高品質題庫中...</p>
+                <div className="h-screen flex items-center justify-center bg-slate-900">
+                    <div className="text-2xl animate-pulse font-light tracking-widest text-yellow-500 font-bold">教材載入中...</div>
                 </div>
             );
 
-            if (error) return (
-                <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-                    <div className="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm">
-                        <div className="text-red-500 text-4xl mb-4">⚠️</div>
-                        <h2 className="text-xl font-bold mb-2">出錯了</h2>
-                        <p className="text-gray-600 mb-6">{error}</p>
-                        <button onClick={fetchData} className="w-full py-2 bg-blue-600 text-white rounded-lg">重試</button>
-                    </div>
-                </div>
-            );
-
-            const currentCard = cards[currentIndex];
+            const puzzleIndex = currentStep - 2;
+            const totalSlides = puzzles.length + 2;
 
             return (
-                <div className="min-h-screen bg-gray-100 flex flex-col items-center py-8 px-4">
-                    {/* Header */}
-                    <header className="w-full max-w-2xl flex justify-between items-center mb-6">
-                        <h1 className="text-2xl font-bold text-gray-800">
-                            水平思考謎題 <span className="text-blue-600 text-lg font-normal ml-2">{cards.length} 題</span>
-                        </h1>
-                        <div className="flex gap-2">
+                <div className="h-screen w-screen flex flex-col relative overflow-hidden">
+                    
+                    {/* Progress Bar */}
+                    <div className="absolute top-0 left-0 w-full h-1 bg-slate-800 z-50">
+                        <div 
+                            className="h-full bg-yellow-500 transition-all duration-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]" 
+                            style={{ width: `${(currentStep / (totalSlides - 1)) * 100}%` }}
+                        ></div>
+                    </div>
+
+                    <main className="flex-grow flex items-center justify-center p-4 md:p-8 lg:p-12 slide-enter overflow-hidden">
+                        
+                        {/* 0. Title Slide */}
+                        {currentStep === 0 && (
+                            <div className="text-center px-4">
+                                <h1 className="text-5xl md:text-8xl font-bold mb-6 tracking-tighter text-white">水平思考謎題</h1>
+                                <p className="text-xl md:text-3xl text-slate-400 font-light tracking-widest uppercase mb-16">Lateral Thinking Workshop</p>
+                                <button 
+                                    onClick={nextSlide}
+                                    className="px-16 py-5 bg-yellow-500 text-slate-900 text-xl font-black rounded-full hover:bg-yellow-400 transition transform hover:scale-105 shadow-2xl active:scale-95"
+                                >
+                                    開始體驗挑戰 ➔
+                                </button>
+                            </div>
+                        )}
+
+                        {/* 1. Rules Slide */}
+                        {currentStep === 1 && (
+                            <div className="max-w-5xl w-full">
+                                <h2 className="text-4xl md:text-5xl font-bold mb-12 border-l-8 border-yellow-500 pl-6 text-white">遊戲規則</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+                                    <div className="bg-slate-800/60 p-10 lg:p-12 rounded-[2.5rem] border border-slate-700 shadow-xl">
+                                        <h3 className="text-yellow-500 font-bold mb-6 text-2xl lg:text-3xl">提問限制</h3>
+                                        <p className="text-slate-200 leading-relaxed text-xl lg:text-2xl">
+                                            參與者只能詢問「是非題」，導師的答案僅會有：<br/>
+                                            <span className="text-yellow-400 font-black mt-6 block text-3xl tracking-tight">「是」、「不是」、「無關」</span>
+                                        </p>
+                                    </div>
+                                    <div className="bg-slate-800/60 p-10 lg:p-12 rounded-[2.5rem] border border-slate-700 shadow-xl">
+                                        <h3 className="text-yellow-500 font-bold mb-6 text-2xl lg:text-3xl">核心目標</h3>
+                                        <p className="text-slate-200 leading-relaxed text-xl lg:text-2xl">
+                                            打破直覺陷阱，透過「水平思考」還原故事真相，找出那些隱藏在文字縫隙中的邏輯。
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="mt-16 text-center">
+                                    <button onClick={nextSlide} className="text-yellow-500 hover:text-white transition font-bold text-2xl animate-bounce">進入第一個謎題 ➔</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 2. Puzzle Slide */}
+                        {currentStep >= 2 && puzzleIndex < puzzles.length && (
+                            <div className="w-full max-w-5xl h-[75vh] min-h-[550px] perspective-container">
+                                <div className={`flip-card-inner ${isFlipped ? 'is-flipped' : ''}`}>
+                                    
+                                    {/* 正面：問題 (Question) */}
+                                    <div className="backface-hidden card-front bg-white text-slate-900 rounded-[3rem] p-8 md:p-12 lg:p-16 flex flex-col shadow-2xl border-b-[16px] border-blue-600">
+                                        <div className="flex justify-between items-center mb-6 shrink-0">
+                                            <div className="flex items-center gap-4">
+                                                <span className="w-4 h-4 rounded-full bg-blue-600 animate-pulse"></span>
+                                                <span className="text-blue-600 font-black tracking-[0.2em] uppercase text-xl">Question {puzzleIndex + 1}</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => speak(puzzles[puzzleIndex].q)}
+                                                className={`p-4 rounded-full transition-all duration-300 ${isSpeaking ? 'bg-red-500 text-white shadow-lg' : 'bg-slate-100 text-slate-400 hover:bg-blue-600 hover:text-white shadow-md'}`}
+                                            >
+                                                <SpeakerIcon />
+                                            </button>
+                                        </div>
+                                        <div className="content-scroll-area custom-scrollbar">
+                                            <div className="text-wrapper">
+                                                <p className="text-3xl md:text-4xl lg:text-5xl font-bold text-center leading-[1.3] text-slate-800">
+                                                    {puzzles[puzzleIndex].q}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-8 text-center shrink-0">
+                                            <button 
+                                                onClick={() => setIsFlipped(true)}
+                                                className="px-14 py-4 bg-slate-900 text-white text-xl font-black rounded-2xl hover:bg-blue-700 transition-all shadow-xl hover:-translate-y-2 active:translate-y-0"
+                                            >
+                                                揭曉真相
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 背面：答案 (Answer) */}
+                                    <div className="backface-hidden card-back bg-yellow-400 text-slate-900 rounded-[3rem] p-8 md:p-12 lg:p-16 flex flex-col shadow-2xl border-b-[16px] border-yellow-700">
+                                        <div className="flex justify-between items-center mb-6 shrink-0">
+                                            <div className="flex items-center gap-4">
+                                                <span className="w-4 h-4 rounded-full bg-slate-900"></span>
+                                                <span className="text-slate-900 font-black tracking-[0.2em] uppercase text-xl">The Truth</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => speak(puzzles[puzzleIndex].a)}
+                                                className={`p-4 rounded-full transition-all duration-300 ${isSpeaking ? 'bg-red-600 text-white' : 'bg-yellow-500 text-yellow-900 hover:bg-slate-900 hover:text-white shadow-md'}`}
+                                            >
+                                                <SpeakerIcon />
+                                            </button>
+                                        </div>
+                                        <div className="content-scroll-area custom-scrollbar">
+                                            <div className="text-wrapper">
+                                                <p className="text-2xl md:text-3xl lg:text-4xl font-bold text-center leading-relaxed text-slate-900">
+                                                    {puzzles[puzzleIndex].a}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-8 text-center shrink-0">
+                                            <button 
+                                                onClick={() => setIsFlipped(false)}
+                                                className="text-slate-900 font-black text-xl border-b-4 border-slate-900 hover:text-slate-700 transition-all pb-1"
+                                            >
+                                                ← 返回題目
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. Ending Slide */}
+                        {currentStep >= 2 && puzzleIndex >= puzzles.length && (
+                            <div className="text-center slide-enter">
+                                <div className="text-9xl mb-12">🚀</div>
+                                <h2 className="text-6xl md:text-8xl font-bold mb-8 text-white tracking-tighter">思維全面升級！</h2>
+                                <p className="text-slate-400 text-2xl md:text-3xl mb-20 tracking-wide font-light">恭喜！你已經掌握了從不同角度看世界的鑰匙。</p>
+                                <button 
+                                    onClick={() => setCurrentStep(0)}
+                                    className="px-16 py-5 bg-yellow-500 text-slate-900 text-2xl font-black rounded-full hover:bg-yellow-400 transition shadow-2xl"
+                                >
+                                    重新開始挑戰
+                                </button>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Footer Navigation */}
+                    <footer className="p-6 md:p-10 bg-slate-950/90 backdrop-blur-xl flex justify-between items-center border-t border-slate-800 shrink-0">
+                        <div className="flex items-center gap-10">
+                            <div className="text-slate-500 text-2xl font-mono">
+                                <span className="font-bold text-yellow-500">{currentStep + 1}</span> <span className="mx-2">/</span> {totalSlides}
+                            </div>
+                            <div className="hidden xl:flex gap-4">
+                                <span className="px-4 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-500 font-medium">方向鍵切換</span>
+                                <span className="px-4 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-500 font-medium">空白鍵翻牌</span>
+                            </div>
+                        </div>
+                        <div className="flex gap-6">
                             <button 
-                                onClick={handleSpeak}
-                                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border rounded-lg transition shadow-sm ${isSpeaking ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                onClick={prevSlide}
+                                disabled={currentStep === 0}
+                                className={`px-10 py-4 rounded-2xl transition-all font-black text-xl shadow-lg ${currentStep === 0 ? 'opacity-10 cursor-not-allowed grayscale' : 'bg-slate-800 hover:bg-slate-700 text-white active:scale-95'}`}
                             >
-                                <SpeakerIcon /> {isSpeaking ? '停止' : '高品質朗讀'}
+                                上一頁
                             </button>
                             <button 
-                                onClick={handleShuffle}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm"
+                                onClick={nextSlide}
+                                disabled={currentStep === totalSlides - 1}
+                                className={`px-12 py-4 rounded-2xl transition-all font-black text-xl shadow-2xl ${currentStep === totalSlides - 1 ? 'opacity-10 cursor-not-allowed grayscale' : 'bg-yellow-500 text-slate-900 hover:bg-yellow-400 active:scale-95'}`}
                             >
-                                <ShuffleIcon /> 洗牌
+                                {currentStep === 0 ? '開始課程' : '下一頁 ➔'}
                             </button>
                         </div>
-                    </header>
+                    </footer>
 
-                    {/* Progress */}
-                    <div className="w-full max-w-2xl mb-4 flex justify-between text-sm text-gray-500 font-medium px-1">
-                        <span>卡片 {currentIndex + 1} / {cards.length}</span>
-                        <span>{isFlipped ? "答案 (Answer)" : "問題 (Question)"}</span>
-                    </div>
-
-                    {/* Card */}
-                    <div className="relative w-full max-w-2xl h-[400px] perspective-1000 cursor-pointer" onClick={handleFlip}>
-                        <div className={`card-container relative w-full h-full transform-style-3d duration-500 ${isFlipped ? 'rotate-y-180' : ''}`}>
-                            <div className="absolute w-full h-full backface-hidden bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center p-8 border-t-4 border-blue-500">
-                                <div className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-4">Question</div>
-                                <div className="text-2xl md:text-3xl font-medium text-gray-800 text-center leading-relaxed overflow-y-auto custom-scrollbar w-full max-h-full">
-                                    {currentCard.question}
-                                </div>
-                                <div className="absolute bottom-4 text-gray-400 text-xs animate-pulse">點擊翻牌</div>
-                            </div>
-                            <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-slate-800 text-white rounded-2xl shadow-xl flex flex-col items-center justify-center p-8 border-t-4 border-green-400">
-                                <div className="text-xs font-bold text-green-400 uppercase tracking-widest mb-4">Answer</div>
-                                <div className="text-xl md:text-2xl font-light text-center leading-relaxed overflow-y-auto custom-scrollbar w-full max-h-full">
-                                    {currentCard.answer}
-                                </div>
-                                <div className="absolute bottom-4 text-gray-500 text-xs">點擊翻回問題</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Nav Controls */}
-                    <div className="flex items-center gap-8 mt-8">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); changeCard(-1); }}
-                            className="p-4 rounded-full bg-white text-gray-700 shadow-md hover:bg-blue-50 hover:text-blue-600 hover:scale-110 transition duration-200"
-                        >
-                            <ArrowLeftIcon />
-                        </button>
-                        <div className="text-gray-400 text-sm hidden md:block select-none">
-                            快捷鍵： <span className="border border-gray-300 rounded px-1.5 mx-1">←</span> <span className="border border-gray-300 rounded px-1.5 mx-1">空白鍵</span> <span className="border border-gray-300 rounded px-1.5 mx-1">→</span>
-                        </div>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); changeCard(1); }}
-                            className="p-4 rounded-full bg-white text-gray-700 shadow-md hover:bg-blue-50 hover:text-blue-600 hover:scale-110 transition duration-200"
-                        >
-                            <ArrowRightIcon />
-                        </button>
-                    </div>
                 </div>
             );
         };
